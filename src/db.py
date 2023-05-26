@@ -45,7 +45,7 @@ class User(db.Model):
     3. Creates a new update token
     """
     self.session_token = self._urlsafe_base_64()
-    self.session_expiration = datetime.datatime.now() + datetime.timedelta(days=1)
+    self.session_expiration = datetime.datetime.now() + datetime.timedelta(days=1)
     self.update_token = self._urlsafe_base_64()
 
   def verify_password(self, password):

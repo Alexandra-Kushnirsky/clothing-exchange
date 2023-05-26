@@ -4,6 +4,7 @@ DAO (Data Access Object) file
 Helper file containing functions for accessing data in database
 """
 
+from db import db
 from db import User
 
 def get_user_by_email(email):
@@ -28,7 +29,13 @@ def verify_credentials(email, password):
   """
   Returns true if credentials match, otherwise returns false
   """
-  pass
+  optional_user = get_user_by_email(email)
+  if optional_user is None:
+    return False, None
+
+  # ADD CHECK HERE TO SEE IF EMAIL EXISTS !!!
+
+  return optional_user.verify_password(password), optional_user
 
 def create_user(email, password):
   """
@@ -36,7 +43,18 @@ def create_user(email, password):
 
   Returns if creation was successful, and the User object
   """
-  pass
+  optional_user = get_user_by_email(email)
+  
+  if optional_user is not None:
+    return False, optional_user
+
+  user = User(email=email, password=password)
+
+  db.session.add(user)
+  db.session.commit()
+
+  return True, user
+
 
 def renew_session(update_token):
   """
@@ -44,4 +62,11 @@ def renew_session(update_token):
 
   Returns the User object
   """
-  pass
+  user = get_user_by_update_token(update_token)
+  
+  if user is None:
+    return None
+
+  user.renew_session()
+  db.session.commit()
+  return user

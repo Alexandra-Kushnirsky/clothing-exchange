@@ -13,17 +13,20 @@ def get_user_by_email(email):
   """
   return User.query.filter(User.email == email).first()
 
+
 def get_user_by_session_token(session_token):
   """
   Returns a user object from the database given a session token
   """
   return User.query.filter(User.session_token == session_token).first()
 
+
 def get_user_by_update_token(update_token):
   """
   Returns a user object from the database given an update token
   """
   return User.query.filter(User.update_token == update_token).first()
+
 
 def verify_credentials(email, password):
   """
@@ -36,6 +39,7 @@ def verify_credentials(email, password):
   # ADD CHECK HERE TO SEE IF EMAIL EXISTS !!!
 
   return optional_user.verify_password(password), optional_user
+
 
 def create_user(email, password):
   """

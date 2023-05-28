@@ -33,7 +33,7 @@ def failure_response(message, code=404):
   return json.dumps({"error": message}), code
 
 
-# TODO: remove later !!!
+# TODO: remove/change later !!!
 @app.route("/")
 def hello():
   return json.dumps({"message":"Hello, World!"})
@@ -306,6 +306,8 @@ def get_item(item_id):
 
 
 # ---------- MESSAGE/CONVERSATION ----------------------------------------------
+# TODO: maybe provide the item's information (either by default in the message 
+# itself or provide item data in success response)
 @app.route("/items/<int:item_id>/contact/", methods=["POST"])
 def contact_owner(item_id):
   """
@@ -336,9 +338,7 @@ def contact_owner(item_id):
     return failure_response("sender id not found or invalid")
 
   if message is None:
-    return failure_response("please provide a message")
-
-  # TODO: test the function has_conversation() some more
+    return failure_response("please provide a message", 403)
 
   # check if conversation exists, and if it doesn't, create a new one
   if (owner.has_conversation(sender)[0]):
@@ -347,7 +347,7 @@ def contact_owner(item_id):
   else:
     # if this is a new conversation, the owner cannot be the sender
     if send_id == owner_id:
-      return failure_response("owner cannot be sender")
+      return failure_response("owner cannot be sender", 403)
     conversation = Conversation()
     conversation.owner.append(User.query.filter_by(id=owner_id).first())
     conversation.inquirer.append(User.query.filter_by(id=send_id).first())
@@ -362,11 +362,80 @@ def contact_owner(item_id):
     timestamp = datetime.datetime.now()
   )
 
-  # commit changes and return success response
+  # commit changes to database and return success response
   db.session.add(new_message)
   db.session.commit()
-  return success_response(conversation.serialize())
-  
+  return success_response({"conversation": conversation.serialize()})
+
+@app.route("/users/<int:user_id>/conversations/")
+def get_user_conversations(user_id):
+  """
+  Endpoint for getting a specific user's conversations 
+  """
+  user = User.query.filter_by(id=user_id).first()
+  if user is None:
+    return failure_response("user not found")
+
+  conversations = []
+  for convo in (user.conversations_where_owner + user.conversations_where_inquirer):
+    conversations.append(convo.serialize())
+  return success_response({"conversations": conversations})
+
+# TODO: maybe change conversation_id to the other user's id?
+@app.route("/users/<int:user_id>/conversations/<int:conversation_id>/")
+def get_conversation(user_id, conversation_id):
+  """
+  Endpoint for getting a specific conversation from a user's conversations
+  """
+  # find user first to save time (conversations >= users)
+  user = User.query.filter_by(id=user_id).first()
+  if user is None:
+    return failure_response("user not found")
+
+  for convo in (user.conversations_where_owner + user.conversations_where_inquirer):
+    if convo.id == conversation_id:
+      return success_response({"conversation": convo.serialize()})
+
+  return failure_response("Conversation not found")
+
+@app.route("/users/<int:user_id>/conversations/<int:conversation_id>/", methods=["POST"])
+def send_message(user_id, conversation_id):
+  """
+  Endpoint for sending message in a conversation where user_id is the user id of
+  the message sender
+  """
+  # ensure that user and conversation are valid
+  user = User.query.filter_by(id=user_id).first()
+  if user is None:
+    return failure_response("user not found")
+
+  conversation = None
+  for convo in (user.conversations_where_owner + user.conversations_where_inquirer):
+    if convo.id == conversation_id:
+      conversation = convo
+      break
+
+  if conversation is None:
+    return failure_response("Conversation not found")
+
+  # retrieve json data
+  body = json.loads(request.data)
+  message = body.get("message_text")
+  if message is None:
+    return failure_response("please provide a message", 403)
+
+  # TODO: make a new message with user_id as sender_id and add to database, 
+  # provide the conversation as success response
+  new_message = Message(
+    conversation_id = conversation.id,
+    message_text = message,
+    sender_id = user_id,
+    timestamp = datetime.datetime.now()
+  )
+
+  db.session.add(new_message)
+  db.session.commit()
+  return success_response({"conversation": conversation.serialize()})
 
 if __name__ == "__main__":
   app.run(host="0.0.0.0", port=8000, debug=True)  

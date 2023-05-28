@@ -206,6 +206,7 @@ def get_all_items():
     items.append(item.serialize())
   return success_response({"items": items})
 
+
 # TODO: maybe delete this later since items are already contained in user object
 @app.route("/users/<int:user_id>/items/")
 def get_user_items(user_id):
@@ -292,6 +293,7 @@ def delete_item(user_id, item_id):
   db.session.commit()
   return success_response(item.serialize())
 
+
 @app.route("/items/<int:item_id>/")
 def get_item(item_id):
   """
@@ -367,6 +369,7 @@ def contact_owner(item_id):
   db.session.commit()
   return success_response({"conversation": conversation.serialize()})
 
+
 @app.route("/users/<int:user_id>/conversations/")
 def get_user_conversations(user_id):
   """
@@ -381,22 +384,25 @@ def get_user_conversations(user_id):
     conversations.append(convo.serialize())
   return success_response({"conversations": conversations})
 
-# TODO: maybe change conversation_id to the other user's id?
-@app.route("/users/<int:user_id>/conversations/<int:conversation_id>/")
-def get_conversation(user_id, conversation_id):
+
+@app.route("/users/<int:user_1_id>/conversations/<int:user_2_id>/")
+def get_conversation(user_1_id, user_2_id):
   """
   Endpoint for getting a specific conversation from a user's conversations
   """
   # find user first to save time (conversations >= users)
-  user = User.query.filter_by(id=user_id).first()
-  if user is None:
-    return failure_response("user not found")
+  user_1 = User.query.filter_by(id=user_1_id).first()
+  user_2 = User.query.filter_by(id=user_2_id).first()
+  if user_1 is None or user_2 is None:
+    return failure_response("user(s) not found")
 
-  for convo in (user.conversations_where_owner + user.conversations_where_inquirer):
-    if convo.id == conversation_id:
-      return success_response({"conversation": convo.serialize()})
+  if user_1.has_conversation(user_2)[0]:
+    conversation_id = user_1.has_conversation(user_2)[1]
+    conversation = Conversation.query.filter_by(id=conversation_id).first()
+    return success_response({"conversation": conversation.serialize()})
+  else:
+    return failure_response("Conversation not found")
 
-  return failure_response("Conversation not found")
 
 @app.route("/users/<int:user_id>/conversations/<int:conversation_id>/", methods=["POST"])
 def send_message(user_id, conversation_id):

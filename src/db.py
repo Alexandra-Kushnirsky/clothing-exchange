@@ -242,7 +242,6 @@ class Message(db.Model):
     """
     return {
       "id": self.id, 
-      "conversation_id": self.conversation_id,
       "sender_id": self.sender_id,
       "message_text": self.message_text,
       "timestamp": self.timestamp

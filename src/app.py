@@ -5,6 +5,8 @@ from flask import request
 
 from db import User
 from db import Item
+from db import Conversation
+from db import Message
 
 import datetime
 import json
@@ -31,7 +33,7 @@ def failure_response(message, code=404):
   return json.dumps({"error": message}), code
 
 
-# remove later !!!
+# TODO: remove later !!!
 @app.route("/")
 def hello():
   return json.dumps({"message":"Hello, World!"})
@@ -190,7 +192,7 @@ def get_user(user_id):
 
   return success_response(user.serialize())
 
-# LATER: research best of updating account info i.e. how to handle sensitive data
+# TODO: research best of updating account info i.e. how to handle sensitive data
 # and implement edit account, as well as delete account
 
 # ---------- ITEM --------------------------------------------------------------
@@ -204,7 +206,7 @@ def get_all_items():
     items.append(item.serialize())
   return success_response({"items": items})
 
-
+# TODO: maybe delete this later since items are already contained in user object
 @app.route("/users/<int:user_id>/items/")
 def get_user_items(user_id):
   """
@@ -227,6 +229,8 @@ def post_item(user_id):
     failure_response("user not found")
 
   body = json.loads(request.data)
+
+  # TODO: create stricter validity checkers for all of the input fields
   new_item = Item(
     title = body.get("title"),
     description = body.get("description"),
@@ -258,7 +262,7 @@ def update_item(user_id, item_id):
     return failure_response("item not found")
 
   body = json.loads(request.data)
-
+  # TODO: create stricter validity checkers for all of the input fields
   item.title = body.get("title", item.title)
   item.description = body.get("description", item.description)
   item.size = body.get("size", item.size)
@@ -301,7 +305,68 @@ def get_item(item_id):
   return success_response(item.serialize())
 
 
+# ---------- MESSAGE/CONVERSATION ----------------------------------------------
+@app.route("/items/<int:item_id>/contact/", methods=["POST"])
+def contact_owner(item_id):
+  """
+  Endpoint for contacting the owner of an item by sending a message
+  """
+  # first get the item and check that it exists
+  item = Item.query.filter_by(id=item_id).first()
+
+  if item is None:
+    return failure_response("item not found")
+
+  # get the item's owner
+  owner_id = item.owner_id
+  owner = User.query.filter_by(id=owner_id).first()
+  if owner is None:
+    return failure_response("owner not found")
+
+  # retrieve json data
+  body = json.loads(request.data)
+  send_id = body.get("sender_id")
+  message = body.get("message_text")
+
+  # get message sender
+  sender = User.query.filter_by(id=send_id).first()
+  
+  # check that all necessary data was provided in the request and is valid
+  if send_id is None or sender is None:
+    return failure_response("sender id not found or invalid")
+
+  if message is None:
+    return failure_response("please provide a message")
+
+  # TODO: test the function has_conversation() some more
+
+  # check if conversation exists, and if it doesn't, create a new one
+  if (owner.has_conversation(sender)[0]):
+    conversation_id = owner.has_conversation(sender)[1]
+    conversation = Conversation.query.filter_by(id=conversation_id).first()
+  else:
+    # if this is a new conversation, the owner cannot be the sender
+    if send_id == owner_id:
+      return failure_response("owner cannot be sender")
+    conversation = Conversation()
+    conversation.owner.append(User.query.filter_by(id=owner_id).first())
+    conversation.inquirer.append(User.query.filter_by(id=send_id).first())
+    conversation_id = conversation.id
+    db.session.add(conversation)
+
+  # create message
+  new_message = Message(
+    message_text = message, 
+    sender_id = send_id, 
+    conversation_id = conversation_id,
+    timestamp = datetime.datetime.now()
+  )
+
+  # commit changes and return success response
+  db.session.add(new_message)
+  db.session.commit()
+  return success_response(conversation.serialize())
+  
 
 if __name__ == "__main__":
   app.run(host="0.0.0.0", port=8000, debug=True)  
-

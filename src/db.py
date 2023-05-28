@@ -7,6 +7,22 @@ from flask_sqlalchemy import SQLAlchemy
 
 db = SQLAlchemy()
 
+# Association tables
+conversation_association_table_owner = db.Table(
+  "conversation_association_owner",
+  db.Column("owner_id", db.Integer, db.ForeignKey("user.id")),
+  db.Column("conversation_id", db.Integer, db.ForeignKey("conversation.id"))
+)
+
+conversation_association_table_inquirer = db.Table(
+  "conversation_association_inquirer",
+  db.Column("inquirer_id", db.Integer, db.ForeignKey("user.id")),
+  db.Column("conversation_id", db.Integer, db.ForeignKey("conversation.id"))
+)
+
+# TODO: add name/username, and necessary address fields to User
+
+# USER
 class User(db.Model):
   """
   User model
@@ -19,6 +35,12 @@ class User(db.Model):
   password_digest = db.Column(db.String, nullable=False)
 
   # Relationships
+  items = db.relationship("Item", cascade="delete")
+  conversations_where_owner = db.relationship("Conversation", 
+  secondary=conversation_association_table_owner, back_populates="owner")
+  conversations_where_inquirer = db.relationship("Conversation", 
+  secondary=conversation_association_table_inquirer, back_populates="inquirer")
+
 
   # Session information
   session_token = db.Column(db.String, nullable=False, unique=True)
@@ -36,12 +58,37 @@ class User(db.Model):
 
   def serialize(self):
     """
-    Serializes a user object
+    Serializes a User object
     """
     return {
       "id": self.id,
-      "email": self.email
+      "email": self.email,
+      "items": [item.serialize() for item in self.items],
+      "conversations": [convo.serialize() for convo in self.conversations_where_owner] + 
+      [convo.serialize() for convo in self.conversations_where_inquirer]
     }
+
+  def simple_serialize(self):
+    """
+    Serializes a User object with only their id
+    """
+    return {"id": self.id}
+    
+
+  # TODO: verify that this is ok to do (might be not very efficient)
+  def has_conversation(self, other_user):
+    """
+    Returns true with the corresponding conversation id if this user has an 
+    existing conversation with this other user and false with -1 otherwise
+    """
+    for conversation in self.conversations_where_inquirer:
+      if conversation.owner[0].id == other_user.id:
+        return True, conversation.id
+    for conversation in self.conversations_where_owner:
+      if conversation.inquirer[0].id == other_user.id:
+        return True, conversation.id
+
+    return False, -1
 
   # ---------- AUTHENTICATION --------------------------------------------------
   def _urlsafe_base_64(self):
@@ -84,6 +131,7 @@ class User(db.Model):
     return update_token == self.update_token
 
 
+# ITEM
 class Item(db.Model):
   """
   Item model
@@ -115,11 +163,10 @@ class Item(db.Model):
     self.date_posted = datetime.datetime.now()
     self.owner_id = kwargs.get("owner_id")
     self.donated = kwargs.get("donated")
-    # relationships go here
 
   def serialize(self):
     """
-    Serialize an item object
+    Serialize an Item object
     """
     return {
       "id": self.id, 
@@ -132,5 +179,72 @@ class Item(db.Model):
       "condition": self.condition,
       "date_posted": self.date_posted,
       "donated": self.donated
+    }
+
+
+# CONVERSATION
+class Conversation(db.Model):
+  """
+  Conversation model
+  """
+  __tablename__ = "conversation"
+  id = db.Column(db.Integer, primary_key=True, autoincrement=True)
+
+  owner = db.relationship("User", secondary=conversation_association_table_owner, 
+  back_populates="conversations_where_owner")
+  inquirer = db.relationship("User", secondary=conversation_association_table_inquirer, 
+  back_populates="conversations_where_inquirer")
+  messages = db.relationship("Message", cascade="delete")
+
+  # TODO: see if we can delete this
+  def __init__(self, **kwargs):
+    """
+    Initializes a Conversation object
+    """
+
+  def serialize(self):
+    """
+    Serializes a Conversation object
+    """
+    return {
+      "id": self.id,
+      "owner": [o.simple_serialize() for o in self.owner][0], 
+      "inquirer": [i.simple_serialize() for i in self.inquirer][0],
+      "messages": [message.seralize() for message in self.messages]
+    }
+
+# MESSAGE
+class Message(db.Model):
+  """
+  Message model
+  """
+  __tablename__ = "message"
+  id = db.Column(db.Integer, primary_key=True, autoincrement=True)
+
+  # Message information
+  message_text = db.Column(db.String, nullable=False)
+  timestamp = db.Column(db.Integer, nullable = False)
+  conversation_id = db.Column(db.Integer, db.ForeignKey("conversation.id"), nullable=False)
+  sender_id = db.Column(db.Integer, db.ForeignKey("user.id"), nullable=False)
+
+  def __init__(self, **kwargs):
+    """
+    Initializes a Message object
+    """
+    self.message_text = kwargs.get("message_text")
+    self.conversation_id = kwargs.get("conversation_id")
+    self.sender_id = kwargs.get("sender_id")
+    self.timestamp = datetime.datetime.now()
+
+  def seralize(self):
+    """
+    Serializes a Message object
+    """
+    return {
+      "id": self.id, 
+      "conversation_id": self.conversation_id,
+      "sender_id": self.sender_id,
+      "message_text": self.message_text,
+      "timestamp": self.timestamp
     }
 

@@ -7,6 +7,7 @@ from db import User
 from db import Item
 from db import Conversation
 from db import Message
+from db import Asset
 
 import datetime
 import json
@@ -442,6 +443,31 @@ def send_message(user_id, conversation_id):
   db.session.add(new_message)
   db.session.commit()
   return success_response({"conversation": conversation.serialize()})
+
+
+# ---------- IMAGES ------------------------------------------------------------
+
+# TODO: change the way this is being done later as we'll want it to happen when
+# a post is being made
+@app.route("/upload/", methods=["POST"])
+def upload():
+  """
+  Endpoint for uploading an image to AWS given its base64 form, 
+  then storing/returning the URL of that image
+  """
+  body = json.loads(request.data)
+  # maybe just have image_data be part of the request informationfor posting an
+  # item 
+  image_data = body.get("image_data")
+
+  if image_data is None:
+    return failure_response("No base64 image found")
+
+  asset = Asset(image_data=image_data)
+  db.session.add(asset)
+  db.session.commit()
+
+  return success_response(asset.serialize(), 201)
 
 if __name__ == "__main__":
   app.run(host="0.0.0.0", port=8000, debug=True)  
